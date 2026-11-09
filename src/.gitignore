@@ -1,0 +1,4 @@
+cmon_secrets.py
+cmon.db
+__pycache__/
+.DS_Store
