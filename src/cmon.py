@@ -104,10 +104,18 @@ def update_chats():
     except Exception as e:
         print(f"Error during DB update {e}")
 
+def format_reading(label, value):
+    text = f"{label}: {value:.0f} A"
+    if value > CRITICAL_THRESHOLD:
+        return f"🔴 {text}"
+    elif value > WARNING_THRESHOLD:
+        return f"🟠 {text}"
+    return f"🟢 {text}"
+
 def format_value(values, esp_values):
     labels = ["L1", "L2", "L3"]
-    lines = [f"{l}: {d:.0f} A" for l, d in zip(labels, values)]
-    esp_lines = [f"{l}: {d:.0f} A" for l, d in zip(labels, esp_values)]
+    lines = [format_reading(l, d) for l, d in zip(labels, values)]
+    esp_lines = [format_reading(l, d) for l, d in zip(labels, esp_values)]
     return "Південний ввід \n" + "\n".join(lines) + "\n\nПівнічний ввід \n" + "\n".join(esp_lines)
 
 def notify(values, esp_values):
