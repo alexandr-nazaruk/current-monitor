@@ -460,6 +460,26 @@ CRITICAL_THRESHOLD = 300
 pins = LEDBoard(26, 6, 13) #L1:RED L2:BLUE L3:GREEN
 values = [-3, -3, -3]
 esp_values = [-3, -3, -3]
+led_states = [None, None, None]  # last state set per LED: "on" / "blink" / "off"
+
+def update_leds(values):
+    """Set each LED from its current reading (amps): on = critical, blink = warning, off = normal."""
+    for i, value in enumerate(values):
+        if value > CRITICAL_THRESHOLD:
+            state = "on"
+        elif value > WARNING_THRESHOLD:
+            state = "blink"
+        else:
+            state = "off"
+        # Only touch the LED on a state change: blink() restarts the pattern
+        if state != led_states[i]:
+            led_states[i] = state
+            if state == "on":
+                pins[i].on()
+            elif state == "blink":
+                pins[i].blink()
+            else:
+                pins[i].off()
 
 def cleanup():
     print("Очищення ресурсів...")
@@ -491,14 +511,8 @@ def main():
             print(f"ESP cmon: A1:{esp_values[0]:6.2f} A2:{esp_values[1]:6.2f} A3:{esp_values[2]:6.2f}")
             notify(values, esp_values)
             display(values)
-            for i, value in enumerate(values):
-                if (value > CRITICAL_THRESHOLD):
-                    pins[i].on()
-                elif (value > WARNING_THRESHOLD):
-                    pins[i].blink()
-                else:
-                    pins[i].off()
-            time.sleep(30)
+            update_leds(values)
+            time.sleep(2)
 
             print("")
         
