@@ -77,6 +77,20 @@ TOKEN = TELEGRAM_TOKEN
 BASE_URL = f"https://api.telegram.org/bot{TOKEN}/"
 NAME = "BristolInformBot"
 DB_NAME = "cmon.db"
+INPUT_LABELS = {'S': "південний", 'N': "північний"}
+
+# Apartment numbers per (input, phase), from the electrician's wiring chart;
+# doesn't change unless the wiring does. Expanded below into a flat
+# apartment -> (input, phase) lookup for O(1) queries.
+APARTMENTS_BY_PHASE = {
+    ('N', 'L1'): [4, 11, 18, 25, 32, 39, 46, 53, 60, 67, 74, 81, 88, 95, 102, 109, 116, 123, 130, 137, 144, 151, 158, 165],
+    ('N', 'L2'): [3, 10, 17, 24, 31, 38, 45, 52, 59, 66, 73, 80, 87, 94, 101, 108, 115, 122, 129, 136, 143, 150, 157, 164],
+    ('N', 'L3'): [5, 12, 19, 26, 33, 40, 47, 54, 61, 68, 75, 82, 89, 96, 103, 110, 117, 124, 131, 138, 145, 152, 159, 166],
+    ('S', 'L1'): [6, 13, 20, 27, 34, 41, 48, 55, 62, 69, 76, 83, 90, 97, 104, 111, 118, 125, 132, 139, 141, 147, 148, 154, 155, 161, 162, 168],
+    ('S', 'L2'): [2, 9, 16, 23, 30, 36, 42, 43, 49, 50, 56, 57, 63, 64, 70, 72, 79, 86, 93, 100, 106, 112, 113, 119, 120, 126, 127, 133, 134, 140, 146, 153, 160, 167],
+    ('S', 'L3'): [1, 7, 8, 14, 15, 21, 22, 28, 29, 35, 37, 44, 51, 58, 65, 71, 77, 78, 84, 85, 91, 92, 98, 99, 105, 107, 114, 121, 128, 135, 142, 149, 156, 163],
+}
+APARTMENTS = {n: key for key, apts in APARTMENTS_BY_PHASE.items() for n in apts}
 COOLDOWN = {Level.INFO: 24*60*60, Level.WARNING: 30*60, Level.CRITICAL: 15*60}
 last_msg = {Level.INFO: datetime.now() - timedelta(hours=1), Level.WARNING: datetime.now()-timedelta(hours=1), Level.CRITICAL: datetime.now()-timedelta(hours=1)}
 
@@ -118,6 +132,13 @@ def format_value(values, esp_values):
     esp_lines = [format_reading(l, d) for l, d in zip(labels, esp_values)]
     return "Південний ввід \n" + "\n".join(lines) + "\n\nПівнічний ввід \n" + "\n".join(esp_lines)
 
+def format_apartment(number):
+    match = APARTMENTS.get(number)
+    if not match:
+        return f"Квартиру {number} не знайдено"
+    input_key, phase = match
+    return f"{number} - {INPUT_LABELS[input_key]} {phase}"
+
 def notify(values, esp_values):
     level = Level.INFO
     for value in values + esp_values:
@@ -150,6 +171,7 @@ def set_commands():
     commands = [
         {"command": "load", "description": "Струм по вводах"},
         {"command": "genset", "description": "Рівень палива генератора"},
+        {"command": "apt", "description": "Лінія і фаза за номером квартири"},
     ]
     try:
         requests.post(BASE_URL + "setMyCommands", json={"commands": commands}, timeout=10)
@@ -192,6 +214,15 @@ def tg_worker():
                         elif text.strip().lower().split("@")[0] in ("genset", "/genset"):
                             requests.post(BASE_URL + "sendMessage",
                                           json={"chat_id": chat_id, "text": format_genset()})
+
+                        elif text.strip().split()[0].lower().split("@")[0] in ("/apt", "apt"):
+                            args = text.strip().split()[1:]
+                            if args and args[0].isdigit():
+                                reply = format_apartment(int(args[0]))
+                            else:
+                                reply = "Використання: /apt <номер квартири>"
+                            requests.post(BASE_URL + "sendMessage",
+                                          json={"chat_id": chat_id, "text": reply})
 
 
         except Timeout:
