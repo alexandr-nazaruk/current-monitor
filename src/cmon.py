@@ -57,7 +57,7 @@ def log_data():
                 "L2": int(values[1]),
                 "L3": int(values[2])
             }
-            response = requests.post(URL, json=payload, auth=auth)
+            response = requests.post(URL, json=payload, auth=auth, timeout=15)
             print(f"Status: {response.status_code}, Body: {response.text}")
         except (RequestException, ValueError, HTTPError, ConnectionError) as e:
             print(e)
@@ -132,18 +132,27 @@ def notify(values, esp_values):
 
     now = datetime.now()
     if (now - last_msg[level]).total_seconds() > COOLDOWN[level]:
-        broadcast(msg)
-        last_msg[level] = now
+        # Only start the cooldown if the alert actually went out; otherwise retry next loop.
+        if broadcast(msg):
+            last_msg[level] = now
 
 
 def broadcast(message):
-    """Send message to all known chats"""
+    """Send message to all known chats. Returns True if at least one send succeeded."""
     with sqlite3.connect(DB_NAME) as conn:
         chats = conn.execute("SELECT chat_id FROM chats").fetchall()
-    
+
+    sent = False
     for (chat_id,) in chats:
-        url = BASE_URL + "sendMessage"
-        requests.post(url, data={"chat_id": chat_id, "text": message, "parse_mode": "HTML"})
+        try:
+            resp = requests.post(BASE_URL + "sendMessage",
+                                 data={"chat_id": chat_id, "text": message, "parse_mode": "HTML"},
+                                 timeout=10)
+            resp.raise_for_status()
+            sent = True
+        except RequestException as e:
+            print(f"Telegram send to {chat_id} failed: {e}")
+    return sent
 
 def set_commands():
     """Register the bot menu. Replaces the whole list, so every command goes here."""
