@@ -438,6 +438,14 @@ DATAKOM_UNIT_ID = 1
 DATAKOM_FUEL_REGISTER = 2163
 DATAKOM_FUEL_SCALE = 0.1
 
+# Runtime estimate: the genset shuts itself down at 10 %. The burn rate is
+# percent per running hour, taken from the Nov 2026 fuel log (typical runs
+# ~3.3 %/h, latest ones ~4.5 %/h); the higher one is used to stay on the safe side.
+FUEL_SHUTDOWN_PERCENT = 10
+FUEL_BURN_PERCENT_PER_HOUR = 4.0
+# 130 l fills the tank from 20 % to 100 %.
+FUEL_LITERS_PER_PERCENT = 130 / 80
+
 def recv_exact(sock, n):
     buf = b""
     while len(buf) < n:
@@ -465,7 +473,11 @@ def format_genset():
     fuel = read_datakom_fuel()
     if fuel is None:
         return "Генератор\nDatakom недоступний"
-    return f"Генератор\nПаливо: {fuel:.0f} %"
+    hours_left = max(0.0, (fuel - FUEL_SHUTDOWN_PERCENT) / FUEL_BURN_PERCENT_PER_HOUR)
+    liters_to_full = max(0.0, (100 - fuel) * FUEL_LITERS_PER_PERCENT)
+    return (f"Генератор\nПаливо: {fuel:.0f} %\n"
+            f"Залишилось: ~{hours_left:.1f} годин роботи\n"
+            f"До повного: {liters_to_full:.0f} л")
 
 #### End Datakom genset code ####
 
